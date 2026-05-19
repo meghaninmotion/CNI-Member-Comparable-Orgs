@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNI Member Concurrent Memberships</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#ffffff;--bg-sec:#f5f4f0;--bg-ter:#eeece7;
+  --text:#1a1a18;--text-sec:#5f5e5a;
+  --border:rgba(0,0,0,.10);--border-med:rgba(0,0,0,.18);
+  --r-md:8px;--r-lg:12px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1c1c1a;--bg-sec:#252523;--bg-ter:#2e2e2b;
+    --text:#f0efe9;--text-sec:#9e9d97;
+    --border:rgba(255,255,255,.09);--border-med:rgba(255,255,255,.16);
+  }
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  background:var(--bg-ter);color:var(--text);
+  min-height:100vh;padding:2rem 1rem 3rem;
+}
+.page{max-width:1060px;margin:0 auto;}
+h1{font-size:20px;font-weight:500;margin-bottom:4px;}
+.sub{font-size:13px;color:var(--text-sec);margin-bottom:1.75rem;line-height:1.55;}
+
+/* ── stat cards ── */
+.stat-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;margin-bottom:1.5rem;}
+.sc{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:.875rem 1rem;position:relative;overflow:hidden;}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.sc-clir::before{background:#185FA5;}.sc-dlf::before{background:#0F6E56;}
+.sc-sparc::before{background:#3C3489;}.sc-arl::before{background:#993C1D;}
+.sc-ern::before{background:#3B6D11;}.sc-csg::before{background:#444441;}
+.sc-total::before{background:linear-gradient(90deg,#185FA5,#3C3489,#3B6D11);}
+.sc-org{font-size:10px;font-weight:600;color:var(--text-sec);margin-bottom:4px;letter-spacing:.04em;text-transform:uppercase;}
+.sc-num{font-size:22px;font-weight:500;line-height:1;}
+.sc-note{font-size:10px;color:var(--text-sec);margin-top:4px;line-height:1.35;}
+
+/* ── annotation ── */
+.ann{background:var(--bg-sec);border-radius:var(--r-lg);padding:1rem;margin-bottom:1.5rem;font-size:12px;color:var(--text-sec);line-height:1.65;}
+.ann strong{color:var(--text);}
+.ann-row{margin-top:.5rem;padding-top:.5rem;border-top:0.5px solid var(--border);}
+.tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;vertical-align:middle;margin-right:5px;}
+.tag-pub{background:#E6F1FB;color:#185FA5;}.tag-nopub{background:#F1EFE8;color:#444441;}.tag-na{background:#FCEBEB;color:#A32D2D;}
+
+/* ── tabs ── */
+.tabs{display:flex;gap:4px;margin-bottom:1.5rem;flex-wrap:wrap;}
+.tab{padding:7px 16px;border-radius:20px;font-size:13px;cursor:pointer;border:0.5px solid var(--border-med);background:transparent;color:var(--text-sec);transition:all .15s;font-family:inherit;}
+.tab:hover{border-color:var(--text);color:var(--text);}
+.tab.active{background:var(--text);color:var(--bg);border-color:transparent;}
+.section{display:none;}.section.active{display:block;}
+
+/* ── controls ── */
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1rem;}
+.ctrl-lbl{font-size:12px;color:var(--text-sec);}
+.cb{padding:4px 12px;border-radius:14px;font-size:12px;border:0.5px solid var(--border-med);background:transparent;color:var(--text-sec);cursor:pointer;font-family:inherit;transition:all .12s;}
+.cb.active{background:var(--text);color:var(--bg);border-color:transparent;}
+.cb:hover:not(.active){border-color:var(--text);color:var(--text);}
+input[type=text]{padding:5px 10px;border-radius:var(--r-md);font-size:12px;border:0.5px solid var(--border-med);background:var(--bg);color:var(--text);width:200px;font-family:inherit;}
+input[type=text]::placeholder{color:var(--text-sec);}
+.rc{font-size:12px;color:var(--text-sec);margin-bottom:.75rem;}
+
+/* ── grid ── */
+.grid-hdr{display:grid;grid-template-columns:1fr repeat(6,40px);gap:0;padding:6px 0;border-bottom:1px solid var(--border-med);margin-bottom:2px;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-sec);}
+.gh-org{text-align:center;}
+.grid-row{display:grid;grid-template-columns:1fr repeat(6,40px);gap:0;padding:4px 0;border-bottom:0.5px solid var(--border);align-items:center;transition:background .1s;}
+.grid-row:hover{background:var(--bg-sec);border-radius:4px;}
+.gname{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px;}
+.badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle;background:var(--bg-ter);color:var(--text-sec);}
+.gdot{display:flex;align-items:center;justify-content:center;}
+.don{width:13px;height:13px;border-radius:50%;}
+.doff{width:13px;height:13px;border-radius:50%;background:var(--bg-sec);}
+
+/* ── overlap ── */
+.ov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:10px;}
+.ov-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:1rem;}
+.ov-num{font-size:28px;font-weight:500;line-height:1;margin-bottom:2px;}
+.ov-lbl{font-size:12px;color:var(--text-sec);margin-bottom:10px;padding-bottom:8px;border-bottom:0.5px solid var(--border);}
+.ov-pills{display:flex;flex-wrap:wrap;gap:4px;}
+.pill{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;letter-spacing:.02em;}
+.ov-list{margin-top:8px;font-size:11px;color:var(--text-sec);line-height:1.6;}
+
+/* ── chart ── */
+.ch-item{margin-bottom:1.25rem;}
+.ch-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.ch-lbl{font-size:14px;font-weight:500;}
+.ch-sub{font-size:12px;color:var(--text-sec);}
+.ch-track{height:22px;background:var(--bg-sec);border-radius:4px;overflow:hidden;margin-bottom:6px;}
+.ch-fill{height:100%;border-radius:4px;}
+.ch-types{display:flex;flex-wrap:wrap;gap:0 16px;font-size:11px;color:var(--text-sec);}
+.tdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;vertical-align:middle;}
+
+@media(max-width:640px){
+  .grid-hdr,.grid-row{grid-template-columns:1fr repeat(6,32px);}
+  .don,.doff{width:11px;height:11px;}
+  input[type=text]{width:150px;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>CNI member concurrent memberships</h1>
+<p class="sub">229 CNI members mapped against 6 comparable organizations with publicly available membership lists.</p>
+
+<!-- tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="showTab('chart')">By organization</button>
+  <button class="tab" onclick="showTab('grid')">Member grid</button>
+  <button class="tab" onclick="showTab('overlap')">Overlap clusters</button>
+</div>
+
+<!-- TAB: CHART -->
+<div class="section active" id="tab-chart">
+  <p style="font-size:12px;color:var(--text-sec);margin-bottom:1.25rem;">Share of 229 CNI members also belonging to each peer organization, with member-type breakdown.</p>
+  <div id="chartBody"></div>
+  <div class="ann" style="margin-top:1.5rem;">
+    <strong>Additional organizations in the peer set</strong>
+    <div class="ann-row">
+      <span class="tag tag-na">Partial overlap</span>
+      <strong>Research Libraries UK (RLUK)</strong> — 2 of RLUK's 39 UK and Irish research library members are also CNI members: <strong>Bodleian Libraries</strong> (University of Oxford) and <strong>University of Leeds</strong>. All remaining RLUK members are UK or Irish institutions not represented in CNI's membership.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-nopub">List not public</span>
+      <strong>NDSA</strong> (278 members) — member list is rendered dynamically from a private Google Spreadsheet and is not accessible as a static page; concurrent membership cannot be confirmed from public data.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-nopub">List not public</span>
+      <strong>EDUCAUSE</strong> (~2,100 institutional members) — the member directory is login-gated and not publicly browsable; concurrent membership cannot be confirmed from public data.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-na">No overlap</span>
+      <strong>Jisc</strong> — membership is limited exclusively to UK further education, higher education, and research organizations; no CNI member institutions are Jisc members.
+    </div>
+  </div>
+</div>
+
+<!-- TAB: GRID -->
+<div class="section" id="tab-grid">
+  <div class="controls">
+    <input type="text" id="searchBox" placeholder="Search member name…" oninput="renderGrid()">
+    <span class="ctrl-lbl" style="margin-left:8px;">Filter:</span>
+    <button class="cb active" onclick="setFilter('all')" id="f-all">All</button>
+    <button class="cb" onclick="setFilter('Research Library')" id="f-rl">Research libraries</button>
+    <button class="cb" onclick="setFilter('Academic / Other')" id="f-ac">Academic / other</button>
+    <button class="cb" onclick="setFilter('nonlib')" id="f-nl">Non-library orgs</button>
+    <span class="ctrl-lbl" style="margin-left:8px;">Sort:</span>
+    <button class="cb active" onclick="setSort('alpha')" id="s-alpha">A–Z</button>
+    <button class="cb" onclick="setSort('overlap')" id="s-overlap">Most overlap</button>
+  </div>
+  <p class="rc" id="resultCount"></p>
+  <div class="grid-hdr">
+    <div>Member</div>
+    <div class="gh-org" style="color:#185FA5;">CLIR</div>
+    <div class="gh-org" style="color:#0F6E56;">DLF</div>
+    <div class="gh-org" style="color:#3C3489;">SPARC</div>
+    <div class="gh-org" style="color:#993C1D;">ARL</div>
+    <div class="gh-org" style="color:#3B6D11;">ERN</div>
+    <div class="gh-org" style="color:#444441;">CSG</div>
+  </div>
+  <div id="gridBody"></div>
+</div>
+
+<!-- TAB: OVERLAP -->
+<div class="section" id="tab-overlap">
+  <p style="font-size:12px;color:var(--text-sec);margin-bottom:1.25rem;">CNI members grouped by their exact pattern of concurrent membership across all 6 publicly listed organizations.</p>
+  <div class="ov-grid" id="overlapBody"></div>
+</div>
+
+<!-- stat cards + annotation at bottom -->
+<div style="margin-top:2.5rem;padding-top:1.5rem;border-top:0.5px solid var(--border);">
+  <div class="stat-bar">
+    <div class="sc sc-total">
+      <div class="sc-org">CNI total</div>
+      <div class="sc-num">229</div>
+      <div class="sc-note">members as of Dec 2025</div>
+    </div>
+    <div class="sc sc-clir">
+      <div class="sc-org">CLIR / DLF</div>
+      <div class="sc-num">105 <span style="font-size:13px;font-weight:400;color:var(--text-sec);">/ 113</span></div>
+      <div class="sc-note">also CLIR sponsor / DLF member</div>
+    </div>
+    <div class="sc sc-sparc">
+      <div class="sc-org">SPARC</div>
+      <div class="sc-num">129</div>
+      <div class="sc-note">of 229 CNI members</div>
+    </div>
+    <div class="sc sc-arl">
+      <div class="sc-org">ARL</div>
+      <div class="sc-num">114</div>
+      <div class="sc-note">of 229 CNI members</div>
+    </div>
+    <div class="sc sc-ern">
+      <div class="sc-org">ERN</div>
+      <div class="sc-num">83</div>
+      <div class="sc-note">of 229 CNI members</div>
+    </div>
+    <div class="sc sc-csg">
+      <div class="sc-org">CSG</div>
+      <div class="sc-num">38</div>
+      <div class="sc-note">of 229 CNI members</div>
+    </div>
+    <div class="sc" style="border-top:3px solid #888;">
+      <div class="sc-org">CNI only</div>
+      <div class="sc-num">65</div>
+      <div class="sc-note">in none of the 6 listed orgs</div>
+    </div>
+  </div>
+
+  <div class="ann">
+    <strong>Membership list availability and scope</strong>
+    <div class="ann-row">
+      <span class="tag tag-pub">List public</span>
+      <strong>CLIR, DLF, SPARC, ARL, ERN, CSG</strong> — membership lists are publicly available on each organization's website and were used for this comparison. Sources: CNI Dec 2025; CLIR/DLF Nov 2025; SPARC Jan 2026; ARL, ERN, CSG current.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-nopub">List not public</span>
+      <strong>NDSA</strong> (278 members) — member list is rendered dynamically from a private Google Spreadsheet and is not accessible as a static page; concurrent membership cannot be confirmed from public data.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-nopub">List not public</span>
+      <strong>EDUCAUSE</strong> (~2,100 institutional members) — the member directory is login-gated and not publicly browsable; concurrent membership cannot be confirmed from public data.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-na">No overlap</span>
+      <strong>Jisc</strong> — membership is limited exclusively to UK further education, higher education, and research organizations; no CNI member institutions are Jisc members.
+    </div>
+    <div class="ann-row">
+      <span class="tag tag-na">Partial overlap</span>
+      <strong>Research Libraries UK (RLUK)</strong> — 2 of RLUK's 39 UK and Irish research library members are also CNI members: Bodleian Libraries (University of Oxford) and University of Leeds. All remaining RLUK members are UK or Irish institutions not represented in CNI's membership.
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+const ORG_LABELS  = ['CLIR','DLF','SPARC','ARL','ERN','CSG'];
+const ORG_COLORS  = ['#185FA5','#0F6E56','#3C3489','#993C1D','#3B6D11','#444441'];
+
+const MEMBERS = [
+  {n:"1EdTech Consortium",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Alfred P. Sloan Foundation",o:[1,0,0,0,0,0],t:"Foundation"},
+  {n:"AM (AAMC)",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Amazon Web Services",o:[0,0,0,0,1,0],t:"Publisher / Vendor"},
+  {n:"American Institute of Physics",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"American Library Association",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"American University",o:[1,0,1,0,0,0],t:"Academic / Other"},
+  {n:"Andrew W. Mellon Foundation",o:[1,0,0,0,0,0],t:"Foundation"},
+  {n:"Arizona State University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Atmire",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Attain Partners",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Auburn University",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"Augusta University",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Baylor University",o:[0,1,1,0,1,0],t:"Academic / Other"},
+  {n:"Big Ten Academic Alliance",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Bodleian Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Boston College",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"Boston University",o:[0,0,1,1,1,0],t:"Research Library"},
+  {n:"Brandeis University",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Brigham Young University",o:[0,0,0,1,0,0],t:"Research Library"},
+  {n:"Brown University",o:[0,1,1,1,1,1],t:"Research Library"},
+  {n:"Bryn Mawr College",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"California Institute of Technology",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"California Polytechnic State University",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"California State University Fullerton",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"California State University Office of the Chancellor",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"California State University San Bernardino",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Carnegie Mellon University",o:[0,1,0,0,1,1],t:"Research Library"},
+  {n:"Case Western Reserve University",o:[0,1,1,1,1,0],t:"Research Library"},
+  {n:"Central Washington University",o:[0,0,1,0,0,0],t:"Academic / Other"},
+  {n:"Claremont Colleges Library",o:[1,1,0,0,0,0],t:"Academic / Other"},
+  {n:"Clarivate",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Clemson University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Colgate University",o:[1,1,1,0,1,0],t:"Academic / Other"},
+  {n:"Colorado State University",o:[0,1,1,1,1,1],t:"Research Library"},
+  {n:"Columbia University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Cornell University",o:[0,1,1,1,1,1],t:"Research Library"},
+  {n:"Council on Library and Information Resources",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Crossref",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Dalhousie University Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Dartmouth College",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Duke University",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"EBSCO Publishing",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Elsevier Science Publishers B.V.",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Emory University",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"Florida State University",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"Galter Health Sciences Library Northwestern University",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"George Mason University",o:[1,0,1,0,0,0],t:"Academic / Other"},
+  {n:"George Washington University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Georgetown University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Georgia Institute of Technology",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"Georgia State University Library",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"Google Books",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Harvard Business School Baker Library",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Harvard University",o:[0,1,1,1,1,1],t:"Research Library"},
+  {n:"Hoover Institution Library and Archives",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Howard University",o:[1,0,0,1,0,0],t:"Research Library"},
+  {n:"Illinois Institute of Technology",o:[0,0,0,0,1,0],t:"Academic / Other"},
+  {n:"Index Data",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Indiana University",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"Indiana University Indianapolis",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Inter-American Development Bank",o:[0,0,0,0,0,0],t:"Gov / National Lab"},
+  {n:"Internet Archive",o:[1,1,1,0,0,0],t:"Org / Consortium"},
+  {n:"Internet2",o:[0,0,0,0,1,1],t:"Org / Consortium"},
+  {n:"Iowa State University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"ITHAKA",o:[1,1,0,0,0,0],t:"Org / Consortium"},
+  {n:"J. Paul Getty Trust",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Jisc",o:[1,1,0,0,0,0],t:"Academic / Other"},
+  {n:"Johns Hopkins University",o:[0,1,1,1,0,0],t:"Research Library"},
+  {n:"JSTOR",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"JULAC",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Kansas State University",o:[0,0,1,0,1,0],t:"Academic / Other"},
+  {n:"Kent State University",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"King Abdullah University of Science and Technology",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Lafayette College Libraries",o:[1,1,0,0,1,0],t:"Academic / Other"},
+  {n:"Lehigh University",o:[0,0,1,0,0,0],t:"Academic / Other"},
+  {n:"Library of Congress",o:[1,1,0,1,1,0],t:"Research Library"},
+  {n:"Library of Virginia",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Los Alamos National Laboratory Research Library",o:[1,1,0,0,0,0],t:"Gov / National Lab"},
+  {n:"Louisiana State University Libraries",o:[0,0,0,1,0,0],t:"Research Library"},
+  {n:"Loyola University Chicago",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"LYRASIS",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"McMaster University",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"Michigan State University",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"Middle Tennessee State University",o:[1,1,0,0,1,0],t:"Academic / Other"},
+  {n:"Mississippi State University Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Monash University Library",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Montana State University",o:[0,0,1,0,1,0],t:"Academic / Other"},
+  {n:"National Archives and Records Administration",o:[0,1,0,0,0,0],t:"Gov / National Lab"},
+  {n:"National Center for Atmospheric Research",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"National Institutes of Health Library",o:[0,0,0,0,0,0],t:"Gov / National Lab"},
+  {n:"National Library of Medicine",o:[1,1,0,1,0,0],t:"Gov / National Lab"},
+  {n:"Naval Postgraduate School",o:[0,0,0,0,1,0],t:"Gov / National Lab"},
+  {n:"New York Public Library",o:[1,1,0,1,0,0],t:"Research Library"},
+  {n:"New York University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"North Carolina State University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Northeastern University",o:[1,1,1,0,1,0],t:"Academic / Other"},
+  {n:"Northwestern University",o:[0,1,1,1,0,1],t:"Research Library"},
+  {n:"Notch8",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"OCLC Inc.",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Ohio State University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Ohio University",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"Oklahoma State University",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"Old Dominion University",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Ontario Council of University Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Oregon State University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Pacific Northwest National Laboratory",o:[0,0,0,0,0,0],t:"Gov / National Lab"},
+  {n:"Pennsylvania State University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Princeton Theological Seminary Library",o:[1,1,0,0,0,0],t:"Academic / Other"},
+  {n:"Princeton University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Project MUSE Johns Hopkins University Press",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Purdue University",o:[0,1,1,1,1,0],t:"Research Library"},
+  {n:"Queens University",o:[0,0,0,1,0,0],t:"Research Library"},
+  {n:"Rensselaer Polytechnic Institute Libraries",o:[0,0,0,0,1,0],t:"Academic / Other"},
+  {n:"Rice University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Rowan University",o:[0,0,1,0,1,0],t:"Academic / Other"},
+  {n:"Rutgers University",o:[0,0,1,1,1,0],t:"Research Library"},
+  {n:"Sage Publications",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"San Diego State University",o:[1,0,0,0,0,0],t:"Academic / Other"},
+  {n:"SCELC",o:[0,0,0,0,0,0],t:"Org / Consortium"},
+  {n:"Skidmore College",o:[0,1,1,0,0,0],t:"Academic / Other"},
+  {n:"Smithsonian Institution",o:[1,1,0,1,0,0],t:"Gov / National Lab"},
+  {n:"Southern Methodist University",o:[1,1,0,0,0,0],t:"Academic / Other"},
+  {n:"Springer Nature",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Stanford University",o:[1,1,1,0,1,1],t:"Academic / Other"},
+  {n:"Stony Brook University",o:[0,0,0,1,1,0],t:"Research Library"},
+  {n:"Syracuse University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Taylor and Francis",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Temple University",o:[0,1,1,1,0,0],t:"Research Library"},
+  {n:"Texas A&M University",o:[0,0,1,1,1,1],t:"Research Library"},
+  {n:"Texas State University",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"Texas Tech University",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"The College of William and Mary",o:[0,0,0,0,1,0],t:"Academic / Other"},
+  {n:"TIND",o:[0,0,0,0,0,0],t:"Publisher / Vendor"},
+  {n:"Tufts University",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"Tulane University",o:[1,1,0,1,1,0],t:"Research Library"},
+  {n:"U.S. Government Publishing Office",o:[0,0,0,0,0,0],t:"Gov / National Lab"},
+  {n:"Union College",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"United States Military Academy Library",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Universiteit van Amsterdam",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University at Albany SUNY",o:[1,1,0,1,0,0],t:"Research Library"},
+  {n:"University at Buffalo SUNY",o:[0,0,1,1,1,1],t:"Research Library"},
+  {n:"University of Alabama",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Alberta Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Arizona",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Arkansas",o:[1,1,1,0,1,0],t:"Academic / Other"},
+  {n:"University of British Columbia",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Calgary",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of California Berkeley",o:[1,1,0,1,1,1],t:"Research Library"},
+  {n:"University of California Davis",o:[0,0,0,1,0,0],t:"Research Library"},
+  {n:"University of California Irvine",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of California Los Angeles",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of California Merced",o:[0,0,1,0,0,0],t:"Academic / Other"},
+  {n:"University of California Office of the President",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of California Riverside",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of California San Diego",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of California San Francisco",o:[0,0,1,0,1,0],t:"Academic / Other"},
+  {n:"University of California Santa Barbara",o:[0,1,1,1,1,0],t:"Research Library"},
+  {n:"University of California Santa Cruz",o:[1,1,0,1,0,0],t:"Research Library"},
+  {n:"University of Chicago",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Cincinnati",o:[0,0,1,1,1,0],t:"Research Library"},
+  {n:"University of Colorado at Boulder",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Connecticut",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"University of Delaware",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Denver",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"University of Florida",o:[0,0,1,1,1,0],t:"Research Library"},
+  {n:"University of Georgia",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Hawaii",o:[0,0,0,1,1,0],t:"Research Library"},
+  {n:"University of Houston",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Illinois at Chicago",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"University of Illinois at Urbana-Champaign",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Iowa",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Kansas",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Kentucky",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Leeds",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Limerick",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Louisville",o:[1,1,0,1,1,0],t:"Research Library"},
+  {n:"University of Manitoba",o:[0,0,1,1,1,0],t:"Research Library"},
+  {n:"University of Maryland at College Park",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Massachusetts Amherst",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Miami",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Michigan",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Minnesota",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Mississippi Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Missouri",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"University of Nebraska at Lincoln",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"University of Nevada Las Vegas",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"University of Nevada Reno",o:[0,0,1,0,1,0],t:"Academic / Other"},
+  {n:"University of New Mexico",o:[0,0,1,1,1,0],t:"Research Library"},
+  {n:"University of North Carolina Chapel Hill",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of North Texas",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Northern Iowa",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Notre Dame",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"University of Oklahoma",o:[1,0,1,1,1,0],t:"Research Library"},
+  {n:"University of Oregon",o:[0,0,1,0,0,0],t:"Academic / Other"},
+  {n:"University of Ottawa",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"University of Pennsylvania",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Pittsburgh",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Regina",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Rochester",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of San Diego Copley Library",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Saskatchewan",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"University of South Carolina",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of South Florida",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"University of Southern California",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Sydney Library",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Tennessee",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Tennessee at Chattanooga",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Texas at Arlington",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"University of Texas at Austin",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Texas at San Antonio",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"University of Toronto",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"University of Utah",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"University of Virginia",o:[0,1,1,1,1,1],t:"Research Library"},
+  {n:"University of Washington",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"University of Waterloo",o:[0,0,1,1,0,0],t:"Research Library"},
+  {n:"University of Wisconsin-Madison",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"University of Wyoming",o:[1,1,1,0,1,0],t:"Academic / Other"},
+  {n:"Utah State University",o:[0,0,1,0,0,0],t:"Academic / Other"},
+  {n:"Vanderbilt University",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"Virginia Commonwealth University",o:[1,1,1,1,1,0],t:"Research Library"},
+  {n:"Virginia Polytechnic Institute and State University",o:[1,1,1,1,0,1],t:"Research Library"},
+  {n:"Washington University in St. Louis",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"Wayne State University",o:[1,1,1,1,0,0],t:"Research Library"},
+  {n:"Western Michigan University",o:[0,0,1,0,0,0],t:"Academic / Other"},
+  {n:"Whitman College",o:[1,1,1,0,0,0],t:"Academic / Other"},
+  {n:"Wichita State University Libraries",o:[0,0,0,0,0,0],t:"Academic / Other"},
+  {n:"Yale University",o:[1,1,1,1,1,1],t:"Research Library"},
+  {n:"York University",o:[0,0,1,1,0,0],t:"Research Library"}
+];
+
+let activeFilter='all', activeSort='alpha';
+
+function showTab(id){
+  const ids=['chart','grid','overlap'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',ids[i]===id));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+}
+function setFilter(f){
+  activeFilter=f;
+  ['all','rl','ac','nl'].forEach(x=>document.getElementById('f-'+x).classList.remove('active'));
+  const map={all:'all','Research Library':'rl','Academic / Other':'ac',nonlib:'nl'};
+  document.getElementById('f-'+(map[f]||'all')).classList.add('active');
+  renderGrid();
+}
+function setSort(s){
+  activeSort=s;
+  document.getElementById('s-alpha').classList.toggle('active',s==='alpha');
+  document.getElementById('s-overlap').classList.toggle('active',s==='overlap');
+  renderGrid();
+}
+function getFiltered(){
+  const q=(document.getElementById('searchBox')?.value||'').toLowerCase();
+  let data=MEMBERS.filter(m=>{
+    if(q&&!m.n.toLowerCase().includes(q)) return false;
+    if(activeFilter==='all') return true;
+    if(activeFilter==='nonlib') return !['Research Library','Academic / Other'].includes(m.t);
+    return m.t===activeFilter;
+  });
+  if(activeSort==='overlap')
+    data.sort((a,b)=>b.o.reduce((s,v)=>s+v,0)-a.o.reduce((s,v)=>s+v,0)||a.n.localeCompare(b.n));
+  else
+    data.sort((a,b)=>a.n.localeCompare(b.n));
+  return data;
+}
+
+function renderGrid(){
+  const data=getFiltered();
+  document.getElementById('resultCount').textContent=`Showing ${data.length} of ${MEMBERS.length} CNI members`;
+  document.getElementById('gridBody').innerHTML=data.map(m=>{
+    const dots=m.o.map((v,i)=>
+      `<div class="gdot">${v
+        ?`<div class="don" style="background:${ORG_COLORS[i]};opacity:.85;"></div>`
+        :`<div class="doff"></div>`}</div>`
+    ).join('');
+    return `<div class="grid-row"><div class="gname">${m.n}<span class="badge">${m.t}</span></div>${dots}</div>`;
+  }).join('');
+}
+
+function renderOverlap(){
+  const buckets={};
+  MEMBERS.forEach(m=>{
+    const k=m.o.join('');
+    if(!buckets[k]) buckets[k]={o:m.o,members:[]};
+    buckets[k].members.push(m.n);
+  });
+  const sorted=Object.values(buckets).sort((a,b)=>{
+    const ca=a.o.reduce((s,v)=>s+v,0),cb=b.o.reduce((s,v)=>s+v,0);
+    return cb-ca||b.members.length-a.members.length;
+  });
+  document.getElementById('overlapBody').innerHTML=sorted.map(b=>{
+    const cnt=b.o.reduce((s,v)=>s+v,0);
+    const pills=ORG_LABELS.map((l,i)=>b.o[i]
+      ?`<span class="pill" style="background:${ORG_COLORS[i]}22;color:${ORG_COLORS[i]}">${l}</span>`:'').join('');
+    const desc=cnt===0?'CNI only — no overlap with listed orgs'
+      :cnt===6?'All 6 organizations':`${cnt} organization${cnt>1?'s':''}`;
+    const mlist=b.members.length<=8
+      ?b.members.join(', ')
+      :b.members.slice(0,8).join(', ')+` + ${b.members.length-8} more`;
+    return `<div class="ov-card">
+      <div class="ov-num">${b.members.length}</div>
+      <div class="ov-lbl">${desc}</div>
+      <div class="ov-pills">${pills||'<span style="font-size:11px;color:var(--text-sec)">None</span>'}</div>
+      <div class="ov-list">${mlist}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderChart(){
+  const typeColors={'Research Library':'#185FA5','Academic / Other':'#3B6D11','Gov / National Lab':'#854F0B','Org / Consortium':'#534AB7','Publisher / Vendor':'#993C1D','Foundation':'#0F6E56'};
+  document.getElementById('chartBody').innerHTML=ORG_LABELS.map((label,i)=>{
+    const mems=MEMBERS.filter(m=>m.o[i]);
+    const byType={};
+    mems.forEach(m=>{byType[m.t]=(byType[m.t]||0)+1;});
+    const pct=Math.round(mems.length/229*100);
+    const typeB=Object.entries(byType).sort((a,b)=>b[1]-a[1])
+      .map(([t,c])=>`<span><span class="tdot" style="background:${typeColors[t]||'#888'}"></span>${t}: ${c}</span>`).join('');
+    return `<div class="ch-item">
+      <div class="ch-head">
+        <span class="ch-lbl" style="color:${ORG_COLORS[i]};">${label}</span>
+        <span class="ch-sub">${mems.length} of 229 CNI members (${pct}%)</span>
+      </div>
+      <div class="ch-track"><div class="ch-fill" style="width:${pct}%;background:${ORG_COLORS[i]};opacity:.8;"></div></div>
+      <div class="ch-types">${typeB}</div>
+    </div>`;
+  }).join('');
+}
+
+renderGrid();
+renderOverlap();
+renderChart();
+</script>
+</body>
+</html>
